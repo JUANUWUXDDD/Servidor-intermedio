@@ -3,21 +3,11 @@ const axios = require('axios');
 const app = express();
 const port = 3000; // Puerto en el que correrá el servidor
 
-// Ruta para obtener UserId desde un nombre de usuario
-app.get('/get-userid/:username', async (req, res) => {
-    const username = req.params.username;
-    try {
-        // Solicitud a la API de Roblox para buscar al usuario
-        const response = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}`);
-        res.json(response.data); // Envía los datos al cliente
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+// Ruta para obtener servidores de un lugar (busca solo por UserId)
+app.get('/get-servers-by-userid/:userId/:placeId', async (req, res) => {
+    const userId = req.params.userId;  // El UserId del jugador
+    const placeId = req.params.placeId; // El placeId del juego
 
-// Ruta para obtener servidores públicos de un lugar
-app.get('/get-servers/:placeId', async (req, res) => {
-    const placeId = req.params.placeId;
     let cursor = req.query.cursor || null;
     try {
         // URL base para obtener los servidores
@@ -25,9 +15,32 @@ app.get('/get-servers/:placeId', async (req, res) => {
         if (cursor) {
             url += `&cursor=${cursor}`;
         }
+
         // Solicitud a la API de Roblox para obtener los servidores
         const response = await axios.get(url);
-        res.json(response.data); // Envía los datos al cliente
+        const data = response.data;
+
+        // Buscar en los servidores el que tenga al jugador con el UserId
+        let serverId = null;
+        if (data && data.data) {
+            for (let server of data.data) {
+                if (server.playing) {
+                    for (let token of server.playerTokens) {
+                        if (token == userId) {
+                            serverId = server.id;
+                            break;
+                        }
+                    }
+                }
+                if (serverId) break; // Si encontramos el servidor, salimos del loop
+            }
+        }
+
+        if (serverId) {
+            res.json({ serverId: serverId });  // Devolvemos el ID del servidor donde está el jugador
+        } else {
+            res.status(404).json({ error: "Jugador no encontrado en los servidores" });
+        }
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
